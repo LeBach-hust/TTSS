@@ -59,6 +59,77 @@ inline double relative_error(double val, double ref) {
     return std::abs(val - ref) / denom;
 }
 
+// Cac thong tin ket qua chay 1 lan (dung de ghi vao CSV va in ra console)
+struct RunRecord {
+    std::string prog    = "";      // VD: "dot_seq", "matmul_omp", "cannon_mpi"
+    std::string variant = "std";   // VD: "ijk", "ikj", "tile_1d", "tile_2d", "nb"
+    size_t n            = 0;       // Co vector N hoac kich thuoc ma tran n
+    int procs           = 1;       // So tien trinh MPI (p)
+    int threads         = 1;       // So luong OpenMP moi tien trinh (t)
+    int block           = 0;       // Kich thuoc block/tile (0 neu khong chia tile)
+    int chunk           = 0;       // Kich thuoc doan hang goi MPI_Testall (N3-05)
+    int run             = 1;       // Lan chay thu may (1..5)
+    double init_sec     = 0.0;     // Thoi gian khoi tao / scatter / padding
+    double comp_sec     = 0.0;     // Thoi gian tinh toan (T_tinh)
+    double comm_sec     = 0.0;     // Thoi gian truyen thong MPI (T_truyen)
+    double total_sec    = 0.0;     // Tong thoi gian (T_tong)
+    double checksum     = 0.0;     // Gia tri dot product hoac checksum ma tran C
+};
+
+// Ghi ket qua chay vao file CSV (append, co header neu file moi)
+inline bool append_output_csv(const RunRecord& r, const std::string& filepath = "output.csv") {
+    bool need_header = true;
+    {
+        std::ifstream fin(filepath, std::ios::ate | std::ios::binary);
+        if (fin.is_open() && fin.tellg() > 0) {
+            need_header = false;
+        }
+    }
+
+    std::ofstream fout(filepath, std::ios::app);
+    if (!fout.is_open()) {
+        std::cerr << "[ERROR] Khong the mo file " << filepath << " de ghi!\n";
+        return false;
+    }
+
+    if (need_header) {
+        fout << "prog,variant,n,procs,threads,block,chunk,run,"
+             << "init_sec,comp_sec,comm_sec,total_sec,checksum\n";
+    }
+
+    fout << r.prog << ","
+         << r.variant << ","
+         << r.n << ","
+         << r.procs << ","
+         << r.threads << ","
+         << r.block << ","
+         << r.chunk << ","
+         << r.run << ","
+         << std::fixed << std::setprecision(9)
+         << r.init_sec << ","
+         << r.comp_sec << ","
+         << r.comm_sec << ","
+         << r.total_sec << ","
+         << std::scientific << std::setprecision(15)
+         << r.checksum << "\n";
+    return true;
+}
+
+// In ra ket qua chay ra console (dung cho dot product va test)
+inline void print_run_summary(const RunRecord& r) {
+    std::cout << "[" << r.prog << " | " << r.variant << "]"
+              << " n=" << r.n
+              << " p=" << r.procs
+              << " t=" << r.threads
+              << " block=" << r.block
+              << " run=" << r.run
+              << " | comp=" << std::fixed << std::setprecision(6) << r.comp_sec << "s"
+              << " comm=" << r.comm_sec << "s"
+              << " total=" << r.total_sec << "s"
+              << " | checksum=" << std::scientific << std::setprecision(12) << r.checksum
+              << "\n";
+}
+
 } // namespace common
 
 #endif // COMMON_H
