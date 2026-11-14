@@ -1,0 +1,1 @@
+scenario,variant,size,processes,threads,loop_order,tile_size,simd,run,comp_sec,total_sec,checksum

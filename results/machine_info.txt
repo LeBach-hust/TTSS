@@ -1,0 +1,1 @@
+Ghi thông tin máy thực nghiệm tại đây: CPU/mô hình, số lõi/luồng, cache L1/L2/L3, RAM, hệ điều hành, compiler và phiên bản MPI/OpenMP. Chỉ ghi thông tin đã đo/kiểm chứng.

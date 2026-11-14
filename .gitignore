@@ -1,0 +1,34 @@
+# Build outputs
+/bin/
+/build/
+*.exe
+*.o
+*.obj
+*.dll
+*.lib
+*.a
+*.so
+
+# Runtime outputs
+output.csv
+*.log
+
+# LaTeX auxiliary files
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
