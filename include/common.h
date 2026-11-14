@@ -13,7 +13,7 @@
 
 namespace common {
 
-// Seed co dinh cho viec sinh du lieu vector/ma tran (de dam bao ket qua lap lai duoc)
+// Seed co dinh dung chung cho sinh du lieu vector/ma tran
 constexpr uint64_t SEED_VEC_X = 1001ULL;
 constexpr uint64_t SEED_VEC_Y = 2002ULL;
 constexpr uint64_t SEED_MAT_A = 3003ULL;
@@ -25,16 +25,21 @@ inline double wall_time_sec() {
     return std::chrono::duration<double>(clock::now().time_since_epoch()).count();
 }
 
-// Sinh du lieu vector/ma tran ngau nhien trong khoang [-1.0, 1.0] voi seed co dinh
+// Sinh du lieu vector/ma tran ngau nhien trong khoang [-1, 1] voi seed co dinh
 inline void init_data(std::vector<double>& data, size_t total_elements, uint64_t seed) {
     data.resize(total_elements);
     std::mt19937_64 rng(seed);
     std::uniform_real_distribution<double> dist(-1.0, 1.0);
     for (size_t i = 0; i < total_elements; ++i) {
+        data[i] = dist(rng);
+    }
+}
 
-inline constexpr std::uint32_t kDefaultSeed = 20251115;
+inline void zero_data(std::vector<double>& data, size_t total_elements) {
+    data.assign(total_elements, 0.0);
+}
 
-// Tinh checksum cua vector/ma tran
+// Tinh checksum co trong so vi tri (giup phat hien ca loi sai gia tri lan loi lech chi so hang/cot)
 inline double compute_checksum(const double* data, size_t total_elements) {
     double sum = 0.0;
     for (size_t i = 0; i < total_elements; ++i) {
@@ -48,7 +53,7 @@ inline double compute_checksum(const std::vector<double>& data) {
     return compute_checksum(data.data(), data.size());
 }
 
-// Tinh sai so tuong doi giua 2 gia tri (val, ref)
+// Tinh sai so tuong doi giua 2 ket qua (dung cho dot product va test)
 inline double relative_error(double val, double ref) {
     double denom = std::max(std::abs(ref), 1e-15);
     return std::abs(val - ref) / denom;
