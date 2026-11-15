@@ -1,8 +1,3 @@
-<<<<<<< Updated upstream
-// MPI dot-product implementation (Scatterv + Reduce).
-// TODO: implement MPI initialization, partitioning and reduction.
-int main() { return 0; }
-=======
 #include <mpi.h>
 #include <cstdlib>
 #include <iomanip>
@@ -201,4 +196,3 @@ int main(int argc, char** argv) {
     MPI_Finalize();
     return EXIT_SUCCESS;
 }
->>>>>>> Stashed changes
