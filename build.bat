@@ -51,61 +51,7 @@ if defined MSMPI_LIB64 (
     set "MPI_LIB=-L"!MSMPI_SDK_ROOT!\Lib\x64" -lmsmpi"
 )
 
-:: 4 che do co bien dich (Flags)pacman -S --needed mingw-w64-ucrt-x86_64-gccpacman -Syu$env:Path = "C:\msys64\ucrt64\bin;$env:Path"
-
-g++ --version
-if ($LASTEXITCODE -ne 0) { throw "Không tìm thấy g++ trong PATH" }
-
-.\build.bat seq
-if ($LASTEXITCODE -ne 0) { throw "Build seq thất bại" }
-
-.\build.bat omp
-if ($LASTEXITCODE -ne 0) { throw "Build omp thất bại" }
-
-.\bin\matmul_seq.exe 256 ikj 1
-.\bin\matmul_omp.exe 256 4 ikj 1
-
-.\bin\matmul_seq.exe 1000 ikj 1
-.\bin\matmul_omp.exe 1000 4 ikj 1
-
-.\bin\matmul_seq.exe 1024 ikj 1
-.\bin\matmul_omp.exe 1024 4 ikj 1$env:Path = "C:\msys64\ucrt64\bin;$env:Path"
-
-g++ --version
-if ($LASTEXITCODE -ne 0) { throw "Không tìm thấy g++ trong PATH" }
-
-.\build.bat seq
-if ($LASTEXITCODE -ne 0) { throw "Build seq thất bại" }
-
-.\build.bat omp
-if ($LASTEXITCODE -ne 0) { throw "Build omp thất bại" }
-
-.\bin\matmul_seq.exe 256 ikj 1
-.\bin\matmul_omp.exe 256 4 ikj 1
-
-.\bin\matmul_seq.exe 1000 ikj 1
-.\bin\matmul_omp.exe 1000 4 ikj 1
-
-.\bin\matmul_seq.exe 1024 ikj 1
-.\bin\matmul_omp.exe 1024 4 ikj 1$env:Path = "C:\msys64\ucrt64\bin;$env:Path"
-
-g++ --version
-if ($LASTEXITCODE -ne 0) { throw "Không tìm thấy g++ trong PATH" }
-
-.\build.bat seq
-if ($LASTEXITCODE -ne 0) { throw "Build seq thất bại" }
-
-.\build.bat omp
-if ($LASTEXITCODE -ne 0) { throw "Build omp thất bại" }
-
-.\bin\matmul_seq.exe 256 ikj 1
-.\bin\matmul_omp.exe 256 4 ikj 1
-
-.\bin\matmul_seq.exe 1000 ikj 1
-.\bin\matmul_omp.exe 1000 4 ikj 1
-
-.\bin\matmul_seq.exe 1024 ikj 1
-.\bin\matmul_omp.exe 1024 4 ikj 1
+:: 4 che do co bien dich (Flags)
 set "FLAGS_SEQ=%COMMON_FLAGS% -fopenmp-simd"
 set "FLAGS_OMP=%COMMON_FLAGS% -fopenmp"
 set "FLAGS_MPI=%COMMON_FLAGS% %MPI_INC%"
