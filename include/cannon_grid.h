@@ -206,7 +206,7 @@ inline void gather_matrix(const CannonGrid& g,
             }
         }
 
-        if (n == n_pad) {
+        if (!g.is_padded()) { // Gọi hàm padding
             global_mat = std::move(padded);
         } else {
             unpad_matrix(padded, global_mat, n, n_pad);
