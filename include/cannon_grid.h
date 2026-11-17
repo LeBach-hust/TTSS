@@ -36,6 +36,7 @@ struct CannonGrid {
     int n              = 0;
     int n_pad          = 0;
     int b              = 0;
+    bool is_padded() const { return n != n_pad; } // Kiểm tra trạng thái padding
 };
 
 inline int grid_dim_from_procs(int p) {
@@ -121,7 +122,7 @@ inline void scatter_matrix(const CannonGrid& g,
                            const std::vector<double>& global_mat,
                            std::vector<double>& local_block) {
     const int b          = g.b;
-    const int q          = g.q;
+   // Xóa bỏ biến thừa không sử dụng đến
     const int n          = g.n;
     const int n_pad      = g.n_pad;
     const int block_elems = b * b;
@@ -132,7 +133,7 @@ inline void scatter_matrix(const CannonGrid& g,
     if (g.rank == 0) {
         std::vector<double> padded;
         const double* mat_ptr = nullptr;
-        if (n == n_pad) {
+        if (!g.is_padded()) { // Gọi hàm kiểm tra trạng thái padding
             mat_ptr = global_mat.data();
         } else {
             pad_matrix(global_mat, padded, n, n_pad);
@@ -205,7 +206,7 @@ inline void gather_matrix(const CannonGrid& g,
             }
         }
 
-        if (n == n_pad) {
+        if (!g.is_padded()) { // Gọi hàm padding
             global_mat = std::move(padded);
         } else {
             unpad_matrix(padded, global_mat, n, n_pad);
