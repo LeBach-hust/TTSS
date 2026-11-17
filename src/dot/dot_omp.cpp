@@ -1,3 +1,60 @@
-// OpenMP dot-product implementation.
-// TODO: add an OpenMP reduction and shared output/checksum handling.
-int main() { return 0; }
+#include <iostream>
+#include <vector>
+#include <omp.h>
+#include "common.h"
+
+double calc_dot_omp(const std::vector<double>& x, const std::vector<double>& y, size_t n) {
+    double sum = 0.0;
+    #pragma omp parallel for reduction(+:sum)
+    for (size_t i = 0; i < n; i++) {
+        sum += x[i] * y[i];
+    }
+    return sum;
+}
+
+int main(int argc, char* argv[]) {
+    size_t n = 10000000;
+    int threads = omp_get_max_threads();
+
+    if (argc > 1) n = std::stoull(argv[1]);
+    if (argc > 2) threads = std::stoi(argv[2]);
+
+    // Dat so luong 1 lan duy nhat
+    omp_set_num_threads(threads);
+
+    // Khoi tao du lieu
+    double t0 = common::wall_time_sec();
+    std::vector<double> x, y;
+    common::init_data(x, n, common::SEED_VEC_X);
+    common::init_data(y, n, common::SEED_VEC_Y);
+    double init_sec = common::wall_time_sec() - t0;
+
+    // Tinh dot product lan dau de co gia tri tham chieu (checksum)
+    double res = calc_dot_omp(x, y, n);
+
+    // Chay do 5 lan
+    for (int run = 1; run <= 5; run++) {
+        double start = common::wall_time_sec();
+        res = calc_dot_omp(x, y, n);
+        double comp_sec = common::wall_time_sec() - start;
+
+        common::RunRecord rec;
+        rec.prog = "dot_omp";
+        rec.variant = "omp";
+        rec.n = n;
+        rec.procs = 1;
+        rec.threads = threads;
+        rec.block = 0;
+        rec.run = run;
+        rec.init_sec = init_sec;
+        rec.comp_sec = comp_sec;
+        rec.comm_sec = 0.0;
+        rec.total_sec = comp_sec;
+        rec.checksum = res;
+
+        common::append_output_csv(rec);
+        common::print_run_summary(rec);
+    }
+
+    return 0;
+}

@@ -37,17 +37,18 @@ set "COMMON_FLAGS=-O3 -march=native -std=c++17 -Wall -Wextra -Iinclude"
 :: Tu dong do tim MS-MPI SDK tren Windows (ho tro ca MSYS2 msmpi va Microsoft SDK)
 set "MPI_INC="
 set "MPI_LIB=-lmsmpi"
+set "MSMPI_SDK_ROOT=C:\Program Files (x86)\Microsoft SDKs\MPI"
 
 if defined MSMPI_INC (
     set "MPI_INC=-I"%MSMPI_INC%" -I"%MSMPI_INC%\x64""
-) else if exist "C:\Program Files (x86)\Microsoft SDKs\MPI\Include\mpi.h" (
-    set "MPI_INC=-I"C:\Program Files (x86)\Microsoft SDKs\MPI\Include" -I"C:\Program Files (x86)\Microsoft SDKs\MPI\Include\x64""
+) else if exist "!MSMPI_SDK_ROOT!\Include\mpi.h" (
+    set "MPI_INC=-I"!MSMPI_SDK_ROOT!\Include" -I"!MSMPI_SDK_ROOT!\Include\x64""
 )
 
 if defined MSMPI_LIB64 (
     set "MPI_LIB=-L"%MSMPI_LIB64%" -lmsmpi"
-) else if exist "C:\Program Files (x86)\Microsoft SDKs\MPI\Lib\x64\msmpi.lib" (
-    set "MPI_LIB=-L"C:\Program Files (x86)\Microsoft SDKs\MPI\Lib\x64" -lmsmpi"
+) else if exist "!MSMPI_SDK_ROOT!\Lib\x64\msmpi.lib" (
+    set "MPI_LIB=-L"!MSMPI_SDK_ROOT!\Lib\x64" -lmsmpi"
 )
 
 :: 4 che do co bien dich (Flags)
