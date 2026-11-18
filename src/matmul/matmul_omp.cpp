@@ -144,61 +144,84 @@ void run_matmul_omp(const std::string& variant,
     }
 }
 
+
 int main(int argc, char* argv[]) {
-    // Tham so: matmul_omp.exe [n] [threads] [variant: ijk|ikj|kij] [runs]
     size_t n = 512;
     int threads = omp_get_max_threads();
     std::string variant = "tile";
     int block_size = 64;
-    int num_runs = 5;
+    int run_id = 1;
+    std::string csv_path = "output.csv";
 
-    if (argc > 1) n = std::stoull(argv[1]);
-    if (argc > 2) threads = std::stoi(argv[2]);
-    if (argc > 3) variant = argv[3];
-    if (argc > 4) block_size = std::stoi(argv[4]);
-    if (argc > 5) num_runs = std::stoi(argv[5]);
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+
+        if ((arg == "-n" || arg == "--n") && i + 1 < argc) {
+            n = std::stoull(argv[++i]);
+        } else if ((arg == "-t" || arg == "--threads") && i + 1 < argc) {
+            threads = std::stoi(argv[++i]);
+        } else if ((arg == "-v" || arg == "--variant") && i + 1 < argc) {
+            variant = argv[++i];
+        } else if ((arg == "-b" || arg == "--block") && i + 1 < argc) {
+            block_size = std::stoi(argv[++i]);
+        } else if ((arg == "-r" || arg == "--run") && i + 1 < argc) {
+            run_id = std::stoi(argv[++i]);
+        } else if ((arg == "-o" || arg == "--csv") && i + 1 < argc) {
+            csv_path = argv[++i];
+        } else {
+            std::cerr << "Usage: matmul_omp -n N -t THREADS -v VARIANT -b BLOCK -r RUN -o CSV\n";
+            return EXIT_FAILURE;
+        }
+    }
+
+    if (n == 0 || threads <= 0 || block_size <= 0 ||
+        run_id < 0 || csv_path.empty()) {
+        std::cerr << "[ERROR] Invalid arguments\n";
+        return EXIT_FAILURE;
+    }
 
     omp_set_num_threads(threads);
 
-    size_t bs = (block_size > 0) ? static_cast<size_t>(block_size) : 64;
-    int recorded_block = (variant.find("tile") != std::string::npos) ? block_size : 0;
+    size_t bs = static_cast<size_t>(block_size);
+    int recorded_block =
+        (variant.find("tile") != std::string::npos) ? block_size : 0;
 
-    // Khoi tao 2 ma tran A, B voi seed co dinh va ma tran C = 0
     double t0 = common::wall_time_sec();
+
     std::vector<double> A, B, C;
     common::init_data(A, n * n, common::SEED_MAT_A);
     common::init_data(B, n * n, common::SEED_MAT_B);
     common::zero_data(C, n * n);
+
     double init_sec = common::wall_time_sec() - t0;
 
-    // Chay lan dau de co gia tri tham chieu (checksum)
+    double start = common::wall_time_sec();
     run_matmul_omp(variant, A, B, C, n, bs);
+    double comp_sec = common::wall_time_sec() - start;
 
-    // Chay do 5 lan tinh tich ma tran va ghi ket qua vao CSV + in ra console
-    for (int run = 1; run <= num_runs; run++) {
-        double start = common::wall_time_sec();
-        run_matmul_omp(variant, A, B, C, n, bs);
-        double comp_sec = common::wall_time_sec() - start;
+    double checksum = common::compute_checksum(C);
 
-        double cs = common::compute_checksum(C);
+    common::RunRecord rec;
+    rec.prog = "matmul_omp";
+    rec.variant = variant;
+    rec.n = n;
+    rec.procs = 1;
+    rec.threads = threads;
+    rec.block = recorded_block;
+    rec.run = run_id;
+    rec.init_sec = init_sec;
+    rec.comp_sec = comp_sec;
+    rec.comm_sec = 0.0;
+    rec.total_sec = comp_sec;
+    rec.checksum = checksum;
 
-        common::RunRecord rec;
-        rec.prog = "matmul_omp";
-        rec.variant = variant;
-        rec.n = n;
-        rec.procs = 1;
-        rec.threads = threads;
-        rec.block = recorded_block;
-        rec.run = run;
-        rec.init_sec = init_sec;
-        rec.comp_sec = comp_sec;
-        rec.comm_sec = 0.0;
-        rec.total_sec = comp_sec;
-        rec.checksum = cs;
+    common::print_run_summary(rec);
 
-        common::append_output_csv(rec);
-        common::print_run_summary(rec);
+    if (run_id > 0) {
+        if (!common::append_output_csv(rec, csv_path)) {
+            return EXIT_FAILURE;
+        }
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }
