@@ -256,6 +256,8 @@ def command_for(
     run_id: int,
     csv_path: Path,
     mpi_exec: str | None,
+    *,
+    record_csv: bool,
 ) -> tuple[list[str] | None, dict[str, str], str | None]:
     program = config["program"]
     exe = executable(program)
@@ -272,9 +274,9 @@ def command_for(
         args += ["-r", str(run_id), "-o", str(csv_path)]
     else:
         args += ["-r", str(run_id)]
-        # MPI/Hybrid implementations append whenever -o is non-empty.
-        # Omitting -o for warm-up prevents warm-up records from polluting CSV.
-        if run_id > 0:
+        # MPI/Hybrid do not accept run_id=0 in every implementation.
+        # Use record_csv (not run_id) to decide whether to pass -o.
+        if record_csv:
             args += ["-o", str(csv_path)]
 
     if config["mode"] == "mpi":
@@ -388,7 +390,9 @@ def main() -> int:
             # Run once as warm-up. Local programs accept run=0 and suppress CSV.
             # MPI/Hybrid warm-up uses run=1 but omits -o, so it cannot append CSV.
             warmup_id = 0 if config["mode"] == "local" else 1
-            command, env, reason = command_for(config, warmup_id, raw_path, mpi_exec)
+            command, env, reason = command_for(
+                config, warmup_id, raw_path, mpi_exec, record_csv=False
+            )
             if reason:
                 print(f"[SKIP] {config['label']}: {reason}")
                 scenario_failures += 1
@@ -403,7 +407,9 @@ def main() -> int:
 
             config_ok = True
             for run_id in range(1, args.repeats + 1):
-                command, env, reason = command_for(config, run_id, raw_path, mpi_exec)
+                command, env, reason = command_for(
+                    config, run_id, raw_path, mpi_exec, record_csv=True
+                )
                 if reason:
                     print(f"[SKIP] {config['label']}: {reason}")
                     config_ok = False
