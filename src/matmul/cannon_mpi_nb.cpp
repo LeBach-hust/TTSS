@@ -7,7 +7,7 @@
 #include <vector>
 #include "../../include/common.h"
 #include "../../include/cannon_grid.h"
-
+#include "../../include/timing.h"
 namespace {
 
 void matmul_sequential(const std::vector<double>& A,
@@ -94,20 +94,21 @@ int main(int argc, char** argv) {
     std::vector<double> buf_B1(block_elems, 0.0);
     std::vector<double> local_C(block_elems, 0.0);
 
-    MPI_Barrier(grid.comm);
-    double t_total_start = MPI_Wtime();
+    PhaseTimer timer;
+    timer.reset();
 
-    double t_scatter_start = MPI_Wtime();
+    MPI_Barrier(grid.comm);
+    timer.start_init();
     cannon::scatter_matrix(grid, global_A, buf_A0);
     cannon::scatter_matrix(grid, global_B, buf_B0);
-    double local_init_sec = MPI_Wtime() - t_scatter_start;
+    timer.stop_init();
 
-    double local_comp_sec = 0.0;
-    double local_comm_sec = 0.0;
+    MPI_Barrier(grid.comm);
+    timer.start();
 
-    double t_align_start = MPI_Wtime();
+    timer.start_comm();
     cannon::initial_align(grid, buf_A0, buf_B0);
-    local_comm_sec += (MPI_Wtime() - t_align_start);
+    timer.stop_comm();
 
     double* cur_A = buf_A0.data();
     double* next_A = buf_A1.data();
@@ -119,7 +120,7 @@ int main(int argc, char** argv) {
         bool has_shift = (step + 1 < grid.q);
 
         if (has_shift) {
-            double t_post = MPI_Wtime();
+            timer.start_comm();
             int tag_a = 300 + step * 2;
             int tag_b = 301 + step * 2;
 
@@ -127,38 +128,30 @@ int main(int argc, char** argv) {
             MPI_Irecv(next_B, count, MPI_DOUBLE, grid.down,  tag_b, grid.comm, &reqs[1]);
             MPI_Isend(cur_A,  count, MPI_DOUBLE, grid.left,  tag_a, grid.comm, &reqs[2]);
             MPI_Isend(cur_B,  count, MPI_DOUBLE, grid.up,    tag_b, grid.comm, &reqs[3]);
-            local_comm_sec += (MPI_Wtime() - t_post);
+            timer.stop_comm();
         }
 
-        double t_comp = MPI_Wtime();
+        timer.start_comp();
         cannon::block_mul_add(cur_A, cur_B, local_C.data(), grid.b, block_size);
-        local_comp_sec += (MPI_Wtime() - t_comp);
+        timer.stop_comp();
 
         if (has_shift) {
-            double t_wait = MPI_Wtime();
+            timer.start_comm();
             MPI_Waitall(4, reqs, MPI_STATUSES_IGNORE);
-            local_comm_sec += (MPI_Wtime() - t_wait);
+            timer.stop_comm();
 
             std::swap(cur_A, next_A);
             std::swap(cur_B, next_B);
         }
     }
 
-    double t_gather_start = MPI_Wtime();
+    timer.stop();
+
+    timer.start_init();
     cannon::gather_matrix(grid, local_C, global_C);
-    local_init_sec += (MPI_Wtime() - t_gather_start);
+    timer.stop_init();
 
-    double local_total_sec = MPI_Wtime() - t_total_start;
-
-    double max_init_sec = 0.0;
-    double max_comp_sec = 0.0;
-    double max_comm_sec = 0.0;
-    double max_total_sec = 0.0;
-
-    MPI_Reduce(&local_init_sec, &max_init_sec, 1, MPI_DOUBLE, MPI_MAX, 0, grid.comm);
-    MPI_Reduce(&local_comp_sec, &max_comp_sec, 1, MPI_DOUBLE, MPI_MAX, 0, grid.comm);
-    MPI_Reduce(&local_comm_sec, &max_comm_sec, 1, MPI_DOUBLE, MPI_MAX, 0, grid.comm);
-    MPI_Reduce(&local_total_sec, &max_total_sec, 1, MPI_DOUBLE, MPI_MAX, 0, grid.comm);
+    PhaseTimer max_timer = reduce_max(timer, grid.comm);
 
     if (grid.rank == 0) {
         double checksum_mpi = common::compute_checksum(global_C);
@@ -172,10 +165,10 @@ int main(int argc, char** argv) {
         rec.block = block_size;
         rec.chunk = 0;
         rec.run = run_id;
-        rec.init_sec = max_init_sec;
-        rec.comp_sec = max_comp_sec;
-        rec.comm_sec = max_comm_sec;
-        rec.total_sec = max_total_sec;
+        rec.init_sec = max_timer.init_sec;
+        rec.comp_sec = max_timer.comp_sec;
+        rec.comm_sec = max_timer.comm_sec;
+        rec.total_sec = max_timer.total_sec;
         rec.checksum = checksum_mpi;
 
         common::print_run_summary(rec);
