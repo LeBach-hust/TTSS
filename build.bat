@@ -32,6 +32,13 @@ if not exist bin mkdir bin
 
 :: Cau hinh trinh bien dich C++ (MSYS2 MinGW-w64 g++)
 set "CXX=g++"
+set "PATH=C:\msys64\ucrt64\bin;%PATH%"
+set "MSYS_UCRT_BIN=C:\msys64\ucrt64\bin"
+if exist "%MSYS_UCRT_BIN%\g++.exe" (
+    echo ";!PATH!;" | findstr /I /C:";%MSYS_UCRT_BIN%;" >nul || set "PATH=%MSYS_UCRT_BIN%;!PATH!"
+) else (
+    echo [WARN] Khong tim thay %MSYS_UCRT_BIN%\g++.exe
+)
 set "COMMON_FLAGS=-O3 -march=native -std=c++17 -Wall -Wextra -Iinclude"
 
 :: Tu dong do tim MS-MPI SDK tren Windows (ho tro ca MSYS2 msmpi va Microsoft SDK)
