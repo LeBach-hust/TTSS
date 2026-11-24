@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-11-18T23:16:57+07:00",
+  "timestamp": "2026-11-24T22:06:19+07:00",
   "platform": "Windows-10-10.0.19044-SP0",
   "system": "Windows",
   "release": "10",
   "machine": "AMD64",
   "processor": "Intel64 Family 6 Model 165 Stepping 3, GenuineIntel",
   "logical_cpu_count": 12,
-  "python": "3.13.5 (tags/v3.13.5:6cb20a2, Jun 11 2025, 16:15:46) [MSC v.1943 64 bit (AMD64)]",
+  "python": "3.14.10 (main, Nov 14 2026, 15:01:54)  [MINGW GCC UCRT 16.2.0 64 bit (AMD64)]",
   "compiler_environment": {
     "CXX": null,
     "CC": null,
@@ -18,6 +18,9 @@
   "scenario": "kb1",
   "warmup_runs": 1,
   "measurement_runs_per_configuration": 5,
-  "raw_csv": "kb1_20261118_231657.csv",
-  "summary_csv": "kb1_summary_20261118_231657.csv"
+  "raw_csv": "kb1_20261124_220331.csv",
+  "summary_csv": "kb1_summary_20261124_220331.csv",
+  "total_configurations": 12,
+  "not_implemented": 0,
+  "failed_or_skipped": 0
 }
