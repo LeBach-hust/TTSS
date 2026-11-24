@@ -11,6 +11,7 @@
 #include <vector>
 #include "../../include/common.h"
 #include "../../include/cannon_grid.h"
+#include "../../include/timing.h"
 
 namespace {
 
@@ -139,47 +140,53 @@ int main(int argc, char** argv) {
         common::init_data(B, N * N, common::SEED_MAT_B);
     }
 
-    // 3. Do thoi gian: scatter (init), dich chuyen (comm), nhan khoi (comp), gather (comm)
+    // 3. Do thoi gian bang PhaseTimer
     std::vector<double> local_A, local_B;
-    std::vector<double> local_C(static_cast<size_t>(g.b) * g.b, 0.0);
-    double t_init = 0.0, t_comm = 0.0, t_comp = 0.0;
-
+    std::vector<double> local_C(
+        static_cast<size_t>(g.b) * g.b,
+        0.0
+    );
+    PhaseTimer timer;
+    timer.reset();
     MPI_Barrier(MPI_COMM_WORLD);
-    const double t_total_start = MPI_Wtime();
-
-    double t0 = MPI_Wtime();
+    timer.start();
+    timer.start_init();
     cannon::scatter_matrix(g, A, local_A);
     cannon::scatter_matrix(g, B, local_B);
-    t_init = MPI_Wtime() - t0;
 
-    t0 = MPI_Wtime();
+    timer.stop_init();
+    timer.start_comm();
+
     cannon::initial_align(g, local_A, local_B);
-    t_comm += MPI_Wtime() - t0;
 
+    timer.stop_comm();
+
+    // Vong lap Cannon
     for (int step = 0; step < g.q; ++step) {
-        t0 = MPI_Wtime();
-        block_mul_add_omp(local_A.data(), local_B.data(), local_C.data(), g.b);
-        t_comp += MPI_Wtime() - t0;
+        timer.start_comp();
+        block_mul_add_omp(
+            local_A.data(),
+            local_B.data(),
+            local_C.data(),
+            g.b
+        );
+        timer.stop_comp();
 
-        // Buoc dich sau phep nhan cuoi la thua, bo qua.
         if (step + 1 < g.q) {
-            t0 = MPI_Wtime();
+            timer.start_comm();
             cannon::shift_blocks_once(g, local_A, local_B);
-            t_comm += MPI_Wtime() - t0;
+            timer.stop_comm();
         }
     }
 
     std::vector<double> C;
-    t0 = MPI_Wtime();
+    timer.start_init();
     cannon::gather_matrix(g, local_C, C);
-    t_comm += MPI_Wtime() - t0;
+    timer.stop_init();
+    timer.stop();
 
-    const double t_total = MPI_Wtime() - t_total_start;
-
-    // 4. Lay gia tri lon nhat moi pha qua moi tien trinh
-    const double local_t[4] = {t_init, t_comp, t_comm, t_total};
-    double max_t[4] = {0.0, 0.0, 0.0, 0.0};
-    MPI_Reduce(local_t, max_t, 4, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    // Lay thoi gian lon nhat tren tat ca tien trinh
+    PhaseTimer max_timer = reduce_max(timer, MPI_COMM_WORLD);
 
     // 5. Rank 0: in, kiem tra, roi moi ghi CSV
     int exit_code = EXIT_SUCCESS;
@@ -194,26 +201,27 @@ int main(int argc, char** argv) {
         const double checksum = common::compute_checksum(C);
 
         common::RunRecord rec;
-        rec.prog      = "cannon_hybrid";
-        rec.variant   = "blocking";
-        rec.n         = N;
-        rec.procs     = p;
-        rec.threads   = threads;
-        rec.block     = 0;
-        rec.chunk     = 0;
-        rec.run       = run_id;
-        rec.init_sec  = max_t[0];
-        rec.comp_sec  = max_t[1];
-        rec.comm_sec  = max_t[2];
-        rec.total_sec = max_t[3];
-        rec.checksum  = checksum;
+        rec.prog = "cannon_hybrid";
+        rec.variant = "blocking";
+        rec.n = N;
+        rec.procs = p;
+        rec.threads = threads;
+        rec.block = 0;
+        rec.chunk = 0;
+        rec.run = run_id;
+        rec.init_sec = max_timer.init_sec;
+        rec.comp_sec = max_timer.comp_sec;
+        rec.comm_sec = max_timer.comm_sec;
+        rec.total_sec = max_timer.total_sec;
+        rec.checksum = checksum;
 
         common::print_run_summary(rec);
         std::cout << std::fixed << std::setprecision(6)
-                  << "[cannon_hybrid | timing] init_sec=" << max_t[0] << "s"
-                  << " comp_sec=" << max_t[1] << "s"
-                  << " comm_sec=" << max_t[2] << "s"
-                  << " total_sec=" << max_t[3] << "s\n";
+                << "[cannon_hybrid | timing]"
+                << " init_sec=" << max_timer.init_sec << "s"
+                << " comp_sec=" << max_timer.comp_sec << "s"
+                << " comm_sec=" << max_timer.comm_sec << "s"
+                << " total_sec=" << max_timer.total_sec << "s\n";
 
         bool pass = true;
         if (verify) {

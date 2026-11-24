@@ -35,6 +35,7 @@ bool parse_positive(const std::string& s, size_t& out) {
 }
 
 
+// Nhan cac hang [row_begin, row_end) cua block A voi block B.
 void multiply_rows(
     const double* A,
     const double* B,
@@ -54,7 +55,8 @@ void multiply_rows(
     }
 }
 
-// Nhân ma trận tuần tự để kiểm tra kết quả.
+
+// Nhan ma tran tuan tu de kiem tra ket qua.
 void matmul_sequential(
     const std::vector<double>& A,
     const std::vector<double>& B,
@@ -75,7 +77,7 @@ void matmul_sequential(
     }
 }
 
-} 
+} // namespace
 
 
 int main(int argc, char** argv) {
@@ -203,7 +205,8 @@ int main(int argc, char** argv) {
         }
     }
 
-    if (bad_arg || N > static_cast<size_t>(INT_MAX) ||
+    if (bad_arg ||
+        N > static_cast<size_t>(INT_MAX) ||
         chunk_value > static_cast<size_t>(INT_MAX)) {
 
         if (world_rank == 0) {
@@ -215,6 +218,7 @@ int main(int argc, char** argv) {
 
         MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
     }
+
 
     const int n = static_cast<int>(N);
     const int requested_chunk = static_cast<int>(chunk_value);
@@ -229,7 +233,7 @@ int main(int argc, char** argv) {
     const int b = grid.b;
     const int count = b * b;
 
-    // Chunk thực tế không vượt quá số hàng của block.
+    // Chunk thuc te khong vuot qua so hang cua block.
     const int chunk = std::min(requested_chunk, b);
 
     std::vector<double> global_A;
@@ -257,6 +261,7 @@ int main(int argc, char** argv) {
     const size_t block_elements =
         static_cast<size_t>(b) * b;
 
+    // Double buffering cho giao tiep non-blocking.
     std::vector<double> buf_A0(block_elements, 0.0);
     std::vector<double> buf_A1(block_elements, 0.0);
 
@@ -265,11 +270,14 @@ int main(int argc, char** argv) {
 
     std::vector<double> local_C(block_elements, 0.0);
 
-
     PhaseTimer timer;
     timer.reset();
 
+    // Dong bo truoc khi bat dau tinh thoi gian.
     MPI_Barrier(grid.comm);
+
+    // Bat dau do tong thoi gian truoc scatter.
+    timer.start();
 
     timer.start_init();
 
@@ -278,9 +286,8 @@ int main(int argc, char** argv) {
 
     timer.stop_init();
 
+    // Dong bo sau scatter.
     MPI_Barrier(grid.comm);
-
-    timer.start();
 
     timer.start_comm();
 
@@ -288,6 +295,8 @@ int main(int argc, char** argv) {
 
     timer.stop_comm();
 
+
+    // Con tro den buffer hien tai va buffer tiep theo.
     double* cur_A = buf_A0.data();
     double* next_A = buf_A1.data();
 
@@ -310,7 +319,7 @@ int main(int argc, char** argv) {
             const int tag_A = 300 + step * 2;
             const int tag_B = 301 + step * 2;
 
-            const double comm_start = MPI_Wtime();
+            timer.start_comm();
 
             MPI_Irecv(
                 next_A,
@@ -332,12 +341,30 @@ int main(int argc, char** argv) {
                 &requests[1]
             );
 
-            MPI_Isend(cur_A,  count, MPI_DOUBLE, grid.left,tag_A, grid.comm, &requests[2]);
-            MPI_Isend(cur_B, count, MPI_DOUBLE,  grid.up, tag_B, grid.comm, &requests[3]);
-            timer.comm_sec += MPI_Wtime() - comm_start;
+            MPI_Isend(
+                cur_A,
+                count,
+                MPI_DOUBLE,
+                grid.left,
+                tag_A,
+                grid.comm,
+                &requests[2]
+            );
+
+            MPI_Isend(
+                cur_B,
+                count,
+                MPI_DOUBLE,
+                grid.up,
+                tag_B,
+                grid.comm,
+                &requests[3]
+            );
+
+            timer.stop_comm();
         }
 
-        const double comp_start = MPI_Wtime();
+        timer.start_comp();
 
         #pragma omp parallel
         {
@@ -347,6 +374,7 @@ int main(int argc, char** argv) {
 
                 const int row_end =
                     std::min(row_begin + chunk, b);
+
                 #pragma omp for schedule(static)
                 for (int i = row_begin; i < row_end; ++i) {
 
@@ -362,34 +390,29 @@ int main(int argc, char** argv) {
                         }
                     }
                 }
+
                 #pragma omp master
                 {
                     if (has_shift) {
-
                         int completed = 0;
-
-                        const double poll_start = MPI_Wtime();
-
+                        timer.start_comm();
                         MPI_Testall(
                             4,
                             requests,
                             &completed,
                             MPI_STATUSES_IGNORE
                         );
-
-                        timer.comm_sec +=
-                            MPI_Wtime() - poll_start;
+                        timer.stop_comm();
                     }
                 }
                 #pragma omp barrier
             }
         }
 
-        timer.comp_sec += MPI_Wtime() - comp_start;
-
+        timer.stop_comp();
         if (has_shift) {
 
-            const double wait_start = MPI_Wtime();
+            timer.start_comm();
 
             MPI_Waitall(
                 4,
@@ -397,14 +420,13 @@ int main(int argc, char** argv) {
                 MPI_STATUSES_IGNORE
             );
 
-            timer.comm_sec += MPI_Wtime() - wait_start;
+            timer.stop_comm();
 
             std::swap(cur_A, next_A);
             std::swap(cur_B, next_B);
         }
     }
 
-    timer.stop();
     timer.start_init();
 
     cannon::gather_matrix(
@@ -415,8 +437,8 @@ int main(int argc, char** argv) {
 
     timer.stop_init();
 
+    timer.stop();
     PhaseTimer max_timer = reduce_max(timer, grid.comm);
-
     int exit_code = EXIT_SUCCESS;
 
     if (grid.rank == 0) {
@@ -444,6 +466,8 @@ int main(int argc, char** argv) {
 
         record.checksum  = checksum;
 
+
+        // In cau hinh.
         std::cout
             << "[cannon_hybrid_nb | config]"
             << " procs=" << grid.p
@@ -456,8 +480,12 @@ int main(int argc, char** argv) {
             << " actual_chunk=" << chunk
             << "\n";
 
+
+        // In tom tat ket qua.
         common::print_run_summary(record);
 
+
+        // In cac pha thoi gian.
         std::cout
             << std::fixed
             << std::setprecision(6)
@@ -515,17 +543,25 @@ int main(int argc, char** argv) {
         }
 
         if (pass && !csv_path.empty()) {
+
             common::append_output_csv(
                 record,
                 csv_path
             );
         }
+
         if (!pass) {
             exit_code = EXIT_FAILURE;
         }
     }
 
-    MPI_Bcast(&exit_code, 1, MPI_INT, 0, grid.comm);
+    MPI_Bcast(
+        &exit_code,
+        1,
+        MPI_INT,
+        0,
+        grid.comm
+    );
 
     cannon::free_grid(grid);
     MPI_Finalize();
