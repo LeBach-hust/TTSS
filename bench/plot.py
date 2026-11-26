@@ -365,6 +365,136 @@ def plot_kb5(rows: list[dict]):
     else:
         print("[SKIP] KB5 tile-size: không tìm thấy tile_size")
 
+KB2_VARIANT_LABELS = {
+    "ikj": "Standard (ikj)",
+    "tile": "Tile 1D",
+    "tile_1d": "Tile 1D",
+    "tile_2d": "Tile 2D",
+}
+KB2_VARIANT_ORDER = ["ikj", "tile_1d", "tile_2d"]
+
+
+def _kb2_groups(rows: list[dict]) -> dict[tuple[str, int, int], list[float]]:
+    """Gom thoi gian total theo (variant, n, threads)."""
+    groups = defaultdict(list)
+    for r in rows:
+        if r["_prog"] and r["_prog"] != "matmul_omp":
+            continue
+        if r["_n"] is None or r["_total"] is None or r["_total"] <= 0:
+            continue
+        variant = r["_variant"].lower() or "unknown"
+        if variant == "tile":
+            variant = "tile_1d"
+        groups[(variant, r["_n"], r["_threads"] or 1)].append(r["_total"])
+    return dict(groups)
+
+# Kich ban 2: OpenMP 1, 2, 4, 8 luong; n = 512, 1024, 2048; ban chuan, tile 1D va tile 2D.
+def plot_kb2(rows: list[dict]):
+    groups = _kb2_groups(rows)
+    if not groups:
+        print("[SKIP] KB2: CSV chưa có dữ liệu matmul_omp")
+        return
+
+    ns = sorted({k[1] for k in groups})
+    threads_all = sorted({k[2] for k in groups})
+    found = {k[0] for k in groups}
+    variants = [v for v in KB2_VARIANT_ORDER if v in found] + sorted(found - set(KB2_VARIANT_ORDER))
+
+    def label(v):
+        return KB2_VARIANT_LABELS.get(v, v)
+
+    #Hình 1: thời gian theo số luồng, mỗi n một ô, có thanh min-max
+    fig, axes = plt.subplots(1, len(ns), figsize=(5 * len(ns), 4.5), squeeze=False)
+    for ax, n in zip(axes[0], ns):
+        for v in variants:
+            pts = [(t, groups[(v, n, t)]) for t in threads_all if (v, n, t) in groups]
+            if not pts:
+                continue
+            ts = [p[0] for p in pts]
+            med = [median(p[1]) for p in pts]
+            lo = [m - min(p[1]) for m, p in zip(med, pts)]
+            hi = [max(p[1]) - m for m, p in zip(med, pts)]
+            ax.errorbar(ts, med, yerr=[lo, hi], marker="o", capsize=3, label=label(v))
+        ax.set_title(f"n = {n}")
+        ax.set_xlabel("Số luồng OpenMP")
+        ax.set_xticks(threads_all)
+        ax.grid(alpha=0.3)
+    axes[0][0].set_ylabel("Thời gian (giây)")
+    axes[0][0].legend(fontsize=8)
+    fig.suptitle("KB2: Thời gian chạy theo số luồng (trung vị, thanh = min–max)")
+    save_figure("kb2_time_by_threads.png")
+
+    #Tính speedup / efficiency so với chính biến thể đó ở 1 luồng
+    scaling = {}  # (v, n, t) -> (speedup, efficiency)
+    for (v, n, t), values in groups.items():
+        base = groups.get((v, n, 1))
+        if base:
+            s = median(base) / median(values)
+            scaling[(v, n, t)] = (s, s / t)
+    if not scaling:
+        print("[SKIP] KB2 speedup/efficiency: thiếu dữ liệu 1 luồng làm mốc")
+    else:
+        #Hình 2 và 3: speedup, efficiency; mỗi biến thể một ô
+        for idx, (fname, ylabel, title) in enumerate((
+            ("kb2_speedup.png", "Speedup  T(1)/T(t)", "KB2: Speedup theo số luồng"),
+            ("kb2_efficiency.png", "Efficiency  S(t)/t", "KB2: Efficiency theo số luồng"),
+        )):
+            fig, axes = plt.subplots(1, len(variants), figsize=(5 * len(variants), 4.5),
+                                     squeeze=False, sharey=True)
+            for ax, v in zip(axes[0], variants):
+                for n in ns:
+                    pts = [(t, scaling[(v, n, t)][idx]) for t in threads_all if (v, n, t) in scaling]
+                    if pts:
+                        ax.plot([p[0] for p in pts], [p[1] for p in pts], marker="o", label=f"n = {n}")
+                ideal = threads_all if idx == 0 else [1.0] * len(threads_all)
+                ax.plot(threads_all, ideal, "k--", alpha=0.5, label="Lý tưởng")
+                ax.set_title(label(v))
+                ax.set_xlabel("Số luồng OpenMP")
+                ax.set_xticks(threads_all)
+                ax.grid(alpha=0.3)
+            axes[0][0].set_ylabel(ylabel)
+            axes[0][0].legend(fontsize=8)
+            fig.suptitle(title)
+            save_figure(fname)
+
+    # Hình 4: GFLOP/s, so sánh 3 biến thể; mỗi n một ô
+    fig, axes = plt.subplots(1, len(ns), figsize=(5 * len(ns), 4.5), squeeze=False)
+    width = 0.8 / len(variants)
+    for ax, n in zip(axes[0], ns):
+        for i, v in enumerate(variants):
+            xs, ys = [], []
+            for j, t in enumerate(threads_all):
+                if (v, n, t) in groups:
+                    xs.append(j + (i - (len(variants) - 1) / 2) * width)
+                    ys.append(2 * n ** 3 / median(groups[(v, n, t)]) / 1e9)
+            if xs:
+                ax.bar(xs, ys, width, label=label(v))
+        ax.set_title(f"n = {n}")
+        ax.set_xlabel("Số luồng OpenMP")
+        ax.set_xticks(range(len(threads_all)))
+        ax.set_xticklabels(threads_all)
+        ax.grid(axis="y", alpha=0.3)
+    axes[0][0].set_ylabel("GFLOP/s  (2n³ / thời gian)")
+    axes[0][0].legend(fontsize=8)
+    fig.suptitle("KB2: Hiệu năng GFLOP/s theo biến thể và số luồng")
+    save_figure("kb2_gflops.png")
+
+    
+    output = RESULTS_DIR / "kb2_results.csv"
+    with output.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["variant", "n", "threads", "samples", "median_sec", "min_sec",
+                         "max_sec", "speedup", "efficiency", "gflops"])
+        for (v, n, t) in sorted(groups, key=lambda k: (k[1], variants.index(k[0]), k[2])):
+            vals = groups[(v, n, t)]
+            s, e = scaling.get((v, n, t), ("", ""))
+            writer.writerow([
+                v, n, t, len(vals), f"{median(vals):.6f}", f"{min(vals):.6f}",
+                f"{max(vals):.6f}",
+                f"{s:.3f}" if s != "" else "", f"{e:.3f}" if e != "" else "",
+                f"{2 * n ** 3 / median(vals) / 1e9:.3f}",
+            ])
+    print(f"[OK] {output.relative_to(ROOT)}")
 
 def write_summary(all_rows: list[dict]):
     if not all_rows:
@@ -480,6 +610,7 @@ def main():
         print("[INFO] No sequential ijk baseline available yet")
     plot_speedup_efficiency(family_rows["kb1"], baselines)
 
+    plot_kb2(family_rows["kb2"])
     plot_kb4(family_rows["kb4"])
     plot_kb5(family_rows["kb5"])
 
