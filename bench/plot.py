@@ -52,6 +52,9 @@ def latest_nonempty_csv(prefix: str) -> tuple[Path | None, list[dict]]:
     usable = []
     for path in candidates:
         rows = [r for r in read_csv(path) if any(str(v).strip() for v in r.values())]
+        
+        if rows and "total_sec" not in rows[0]:
+            continue
         if rows:
             usable.append((path, rows))
     if not usable:

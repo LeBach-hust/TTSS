@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-11-26T22:43:01+07:00",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "system": "Windows",
+  "release": "11",
+  "machine": "AMD64",
+  "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+  "logical_cpu_count": 16,
+  "python": "3.13.1 (tags/v3.13.1:0671451, Dec  3 2024, 19:06:28) [MSC v.1942 64 bit (AMD64)]",
+  "compiler_environment": {
+    "CXX": null,
+    "CC": null,
+    "OMP_NUM_THREADS": null,
+    "OMP_PROC_BIND": null,
+    "OMP_PLACES": null
+  },
+  "mpi_launcher": "mpiexec",
+  "scenario": "kb2",
+  "warmup_runs": 1,
+  "measurement_runs_per_configuration": 5,
+  "raw_csv": "kb2_20261126_223840.csv",
+  "summary_csv": "kb2_summary_20261126_223840.csv",
+  "total_configurations": 36,
+  "not_implemented": 0,
+  "failed_or_skipped": 0
+}
